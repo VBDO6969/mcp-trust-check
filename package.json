@@ -1,0 +1,44 @@
+{
+  "name": "mcp-trust-check",
+  "version": "1.0.0",
+  "description": "Layer 0 of MCP trust-check CLI - connectivity + tool enumeration with modern/legacy lifecycle handling",
+  "type": "module",
+  "bin": {
+    "mcp-trust-check": "./src/cli.ts"
+  },
+  "scripts": {
+    "trust-check": "tsx src/cli.ts",
+    "cli": "tsx src/cli.ts",
+    "dummy": "tsx src/dummy-server.ts",
+    "dummy:legacy": "tsx src/dummy-server-legacy.ts",
+    "build": "tsc",
+    "check": "tsx src/cli.ts check",
+    "test": "npm run test:cli",
+    "test:cli": "tsx src/cli.ts -- npx tsx src/dummy-server.ts",
+    "test:legacy": "tsx src/cli.ts -- npx tsx src/dummy-server-legacy.ts",
+    "test:spawn-fail": "tsx src/cli.ts -- does-not-exist-12345",
+    "test:timeout": "tsx src/cli.ts --timeout 1000 -- npx tsx src/dummy-server-slow.ts",
+    "test:nonjson": "tsx src/cli.ts -- npx tsx src/dummy-server-broken.ts",
+    "approve": "tsx src/cli.ts approve",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "trust-check",
+    "cli"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
