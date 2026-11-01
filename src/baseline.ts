@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { readFile, writeFile, rename, mkdir, readdir } from "node:fs/promises";
 import { CONFIG } from "./config.js";
+import { hashTool, aggregateHash } from "./canonicalize.js";
 
 /**
  * Per-server baseline path — fixes the "single baseline.json overwrites" bug.
@@ -93,7 +94,25 @@ export async function readBaseline(filePath: string): Promise<BaselineFile | nul
       `Unknown baseline schemaVersion ${String(p.schemaVersion)} in ${filePath} (expected ${CONFIG.SCHEMA_VERSION}) — file may be from newer CLI`
     );
   }
-  return parsed as BaselineFile;
+  const baseline = parsed as BaselineFile;
+  // Baseline integrity verification: detects partial/accidental modification.
+  // For each tool, recompute hashTool(definition) and compare with stored hash.
+  for (const tool of baseline.tools ?? []) {
+    const recomputed = hashTool(tool.definition);
+    if (recomputed !== tool.hash) {
+      throw new Error(
+        `Baseline integrity check failed for ${filePath}: tool ${tool.name} definition does not match its stored hash (file modified after approval?)`
+      );
+    }
+  }
+  // Recompute aggregateHash from stored (name, hash) pairs.
+  const recomputedAgg = aggregateHash((baseline.tools ?? []).map((t) => ({ name: t.name, hash: t.hash })));
+  if (recomputedAgg !== baseline.aggregateHash) {
+    throw new Error(
+      `Baseline integrity check failed for ${filePath}: aggregate hash does not match recomputed value (file modified after approval?)`
+    );
+  }
+  return baseline;
 }
 
 export async function writeBaselineAtomic(filePath: string, data: BaselineFile): Promise<void> {

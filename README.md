@@ -43,6 +43,10 @@ Recursively sorts object keys, keeps array order, JSON.stringify. Throws on non-
 ### baseline.ts
 File: {schemaVersion:1, savedAt, command, args, lifecycle, protocolVersion, aggregateHash, previousKey?, tools:[{name,hash,definition}]}. definition full raw. Never stores env vars. Key derivation unchanged: baselines/<first 16 hex of sha256(command + \0 + args.join(\0))>.json or baselines/<name>.json with --name. read null if missing; clear error on corrupted/unknown schemaVersion. Atomic write via temp+rename. Identity: when found by key, compare stored command+args with current; diff -> "launch command changed since approval" (does not block). Related search: read every baselines/*.json, overlap = |common|/min(|current|,|baseline|). Related if >=0.5 (CONFIG.RELATED_OVERLAP_THRESHOLD proposal). Pick highest; report ties. Skip unreadable with warning.
 
+**Baseline integrity verification (Layer 1, after schemaVersion check):** `readBaseline` recomputes `hashTool(tool.definition)` (from `canonicalize.js`) for each tool and compares with stored `tool.hash`; then recomputes `aggregateHash` from stored `(name, hash)` pairs and compares with `baseline.aggregateHash`. On mismatch throws `Baseline integrity check failed for <file>: tool <name> definition does not match its stored hash (file modified after approval?)` or `... aggregate hash does not match recomputed value (file modified after approval?)`. Never prints definition contents. `findRelatedBaselines` already skips unreadable files with a warning, so a tampered file is skipped, not crashing. `approve`/`check` treat `readBaseline` errors as operational errors (exit 2) — behaviour unchanged (confirm: no new exit codes; tell us if you observe a difference).
+
+**Integrity threat model:** This detects *partial or accidental modification only* (e.g. manual edit, merge conflict, truncated write where hashes not updated). It does **NOT** protect against an attacker who has same-privilege local file access and recomputes the hashes after tampering — they can make the file pass integrity. Same-privilege local file is not a security boundary. Real protection would need an HMAC key stored *outside* the baseline file (e.g. OS keychain, env, or remote attestation) or committing baselines to git and verifying via git history/signing. Listed as Known limitation.
+
 ### diff.ts (pure)
 Compare baseline tools vs current by name: added, removed, changed. For changed: list field paths with old/new values (recursive, nested inputSchema). Unchanged not listed.
 
@@ -123,6 +127,7 @@ npx tsx src/cli.ts does-not-exist-12345
 - Overlap threshold 0.5: proposal not spec; may need tuning (CONFIG).
 - Base64 threshold 64: proposal not spec; 32 false-positives. icons[].src exempt.
 - Identity limitation: as above.
+- Baseline integrity: verifies `hashTool(definition)` vs `tool.hash` and `aggregateHash` vs recomputed; detects partial/accidental edits only. **Does NOT stop attacker with same file privilege who recomputes hashes** — local baseline file is not a security boundary; real protection needs HMAC key outside file or baselines committed to git (with history/signature verification). Exit code behaviour unchanged: `readBaseline` errors → exit 2 in `approve`/`check`; `findRelatedBaselines` skips tampered/unreadable with warning (no crash). Notify if you see different behaviour.
 - LLM review and sandbox: not implemented (Layer 2/3).
 
 ## Security
