@@ -20,7 +20,11 @@
     "test:timeout": "tsx src/cli.ts --timeout 1000 -- npx tsx src/dummy-server-slow.ts",
     "test:nonjson": "tsx src/cli.ts -- npx tsx src/dummy-server-broken.ts",
     "approve": "tsx src/cli.ts approve",
-    "typecheck": "tsc --noEmit"
+    "demo:rug-pull:reset": "tsx scripts/reset-rug-pull.ts",
+    "demo:rug-pull:approve": "tsx src/cli.ts approve -- npx tsx src/dummy-server-rug-pull.ts",
+    "demo:rug-pull:check": "tsx src/cli.ts check -- npx tsx src/dummy-server-rug-pull.ts",
+    "demo:rug-pull:approve:accept": "tsx src/cli.ts approve --accept -- npx tsx src/dummy-server-rug-pull.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json"
   },
   "keywords": [
     "mcp",
