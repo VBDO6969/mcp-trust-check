@@ -59,37 +59,19 @@ Identity = key from command+args (or --name) + tool-name overlap. A server that 
 
 ## Demo server - rug pull
 
-Same tool name (get_weather) every launch; benign on launch 1, instruction text on launch 2, WITHOUT modifying Layer 0.
+Tool name: `get_rug_weather`. Same name on every launch.
 
-**Mechanism:** launch-counter state file next to script (src/dummy-server-rug-pull.state.json). Not env var, not Layer 0 change. Why: simple, portable, persists across spawns, demonstrates server update. Env var would require CLI to pass env and risks leaking secrets into baseline (we never store env vars). File-based counter is most realistic; reset script clears it.
+**Mechanism:** the dummy server (`src/dummy-server-rug-pull.ts`) checks whether its own baseline file exists in `baselines/`. No baseline -> benign description. Baseline exists -> description with a hidden instruction. This only simulates a rug pull for the demo; it is not part of the tool and Layer 0 is untouched. Reset: `scripts/reset-rug-pull.ts` removes the baseline.
 
-**Files:**
-- src/dummy-server-rug-pull.ts
-- scripts/reset-rug-pull.ts
-
-**Npm scripts:**
-- npm run demo:rug-pull:reset
-- npm run demo:rug-pull:approve
-- npm run demo:rug-pull:check
-- npm run demo:rug-pull:approve:accept
-
-**Exact commands to reproduce rug-pull demo (PowerShell):**
+**Reproduce (PowerShell):**
 ```powershell
 npm run demo:rug-pull:reset
-npm run demo:rug-pull:approve        # Baseline saved, benign, exit 0
-npm run demo:rug-pull:check          # check passed, exit 0
-# second launch is malicious
-npx tsx src/cli.ts approve -- npx tsx src/dummy-server-rug-pull.ts
-# -> Differences detected, exit 1, baseline NOT overwritten (non-TTY)
-npm run demo:rug-pull:approve:accept # Baseline updated, shows diff
-npx tsx src/cli.ts check -- npx tsx src/dummy-server-rug-pull.ts
-npm run demo:rug-pull:reset          # cleanup
-```
-
-**Interactive TTY test:**
-```powershell
-npx tsx src/cli.ts approve -- npx tsx src/dummy-server-rug-pull.ts
-# When prompted "Replace baseline ...? [y/N]" answer y to overwrite
+npm run demo:rug-pull:approve         # benign, baseline saved, exit 0
+npm run demo:rug-pull:check           # diff with hidden instruction, exit 1
+npm run demo:rug-pull:approve         # in a terminal: asks y/N; piped (no TTY): refuses, exit 1
+npm run demo:rug-pull:approve:accept  # replaces the baseline, exit 0
+npm run demo:rug-pull:check           # unchanged, exit 0 (the malicious version is now the baseline)
+npm run demo:rug-pull:reset
 ```
 
 ## How to run & test
