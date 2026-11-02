@@ -92,8 +92,8 @@ async function main(): Promise<void> {
       console.error(`Lifecycle: ${result.lifecycle}${vi}`);
       printProtocolViolations(result);
       if (result.tools.length===0) console.log("No tools found."); else { console.log(`Found ${result.tools.length} tool(s):`); for(const t of result.tools){ console.log(`- ${(t as Record<string,unknown>).name}: ${(t as Record<string,unknown>).description??"(no description)"}`);} }
-      await doExit(0);
     } catch(err:unknown){ console.error(`Error: ${(err as Error)?.message??String(err)}`); await doExit(2); }
+    await doExit(0);
   }
   let baselinePath: string|undefined; try{ baselinePath=getBaselinePath(command,args,{name:baselineName}); console.error(`[mcp-trust-check] baseline: ${baselinePath} ${baselineName?`(alias: ${baselineName})`:`(auto hash of command)`}`);}catch{}
   let fetchResult!: Awaited<ReturnType<typeof fetchToolDefinitions>>;

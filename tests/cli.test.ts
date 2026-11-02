@@ -78,6 +78,25 @@ describe("CLI approve/check with reviewer", () => {
   const testSuffix = `__cli_test_${Date.now()}`;
   const dummyArgs = ["tsx", "src/dummy-server.ts", testSuffix];
   it("approve twice unchanged (exit 0, file untouched) - second makes zero requests", async () => {
+    requestCount = 0;
+    const r1 = await runCli(["approve", "--accept", "npx", ...dummyArgs]);
+    assert.equal(r1.code, 0, `first approve should exit 0, got ${r1.code} stderr=${r1.stderr}`);
+    const filesBefore = await getBaselineFiles();
+    let baselinePath = "";
+    for (const f of filesBefore) {
+      const raw = await readFile(join("baselines", f), "utf-8");
+      if (raw.includes(testSuffix)) { baselinePath = join("baselines", f); break; }
+    }
+    assert.ok(baselinePath, "baseline file should exist after first approve");
+    const stat1 = await stat(baselinePath);
+    requestCount = 0;
+    const r2 = await runCli(["approve", "npx", ...dummyArgs]);
+    assert.equal(r2.code, 0);
+    assert.ok(r2.stdout.includes("already approved, unchanged") || r2.stderr.includes("already approved"));
+    const stat2 = await stat(baselinePath);
+    assert.equal(stat1.mtimeMs, stat2.mtimeMs);
+    assert.equal(requestCount, 0, "second approve with no diff should make zero reviewer requests");
+  });
   it("rug-pull without --accept in non-TTY should exit 1 and not overwrite", async () => {
     try { await rm("src/dummy-server-rug-pull.state.json", { force: true }); } catch {}
     try { await rm("baselines/31beea1d546d1c70.json", { force: true }); } catch {}
@@ -176,26 +195,6 @@ describe("CLI approve/check with reviewer", () => {
     const r2 = await runCli(["check", "npx", ...argsCheck]);
     assert.equal(r2.code, 2);
     assert.ok(!existsSync(pCheck));
-  });
-
-    requestCount = 0;
-    const r1 = await runCli(["approve", "--accept", "npx", ...dummyArgs]);
-    assert.equal(r1.code, 0, `first approve should exit 0, got ${r1.code} stderr=${r1.stderr}`);
-    const filesBefore = await getBaselineFiles();
-    let baselinePath = "";
-    for (const f of filesBefore) {
-      const raw = await readFile(join("baselines", f), "utf-8");
-      if (raw.includes(testSuffix)) { baselinePath = join("baselines", f); break; }
-    }
-    assert.ok(baselinePath, "baseline file should exist after first approve");
-    const stat1 = await stat(baselinePath);
-    requestCount = 0;
-    const r2 = await runCli(["approve", "npx", ...dummyArgs]);
-    assert.equal(r2.code, 0);
-    assert.ok(r2.stdout.includes("already approved, unchanged") || r2.stderr.includes("already approved"));
-    const stat2 = await stat(baselinePath);
-    assert.equal(stat1.mtimeMs, stat2.mtimeMs);
-    assert.equal(requestCount, 0, "second approve with no diff should make zero reviewer requests");
   });
 
   it("poisoned dummy first approve non-TTY no --accept -> exit 1 no baseline", async () => {
@@ -298,5 +297,11 @@ describe("CLI approve/check with reviewer", () => {
     assert.equal(r2.code, 2);
     assert.ok(r2.stderr.includes("BASETEN_API_KEY") && r2.stderr.includes("not set"));
     assert.ok(!existsSync(p2));
+  });
+  it("no-subcommand listing exits 0 and stderr does not contain __EXIT__", async () => {
+    const r = await runCli(["npx", "tsx", "src/dummy-server.ts", testSuffix + "_listing"]);
+    assert.equal(r.code, 0, `listing should exit 0, got ${r.code} stdout=${r.stdout} stderr=${r.stderr}`);
+    assert.ok(!r.stderr.includes("__EXIT"), `stderr should not contain __EXIT, got ${r.stderr}`);
+    assert.ok(!r.stderr.includes("__EXIT_0__") && !r.stderr.includes("__EXIT_2__"));
   });
 });
