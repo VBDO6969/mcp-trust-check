@@ -35,7 +35,17 @@ function sanitizeIcons(value: unknown): unknown {
         result[k] = v.map((item) => {
           if (item !== null && typeof item === "object" && "src" in (item as Record<string, unknown>)) {
             const icon = item as Record<string, unknown>;
-            return { ...icon, src: "[omitted]" };
+            const src = icon.src;
+            if (typeof src === "string" && src.toLowerCase().startsWith("data:")) {
+              return { ...icon, src: "[omitted]" };
+            }
+            // keep other src values as they are (but still sanitize nested structures)
+            // still need to sanitize any nested icons inside this icon object
+            const sanitizedIcon: Record<string, unknown> = {};
+            for (const [ik, iv] of Object.entries(icon)) {
+              sanitizedIcon[ik] = sanitizeIcons(iv);
+            }
+            return sanitizedIcon;
           }
           return sanitizeIcons(item);
         });
@@ -48,11 +58,19 @@ function sanitizeIcons(value: unknown): unknown {
   return value;
 }
 
+// validate.ts does NOT export its invisible-char patterns, so define local constants here (do NOT refactor validate.ts)
+const INVISIBLE_RE = /[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF\u0080-\u009F]/g;
+const TAG_RE = /[\u{E0000}-\u{E007F}]/gu;
+
 function cleanReason(reason: string): string {
   let out = reason.replace(/\x1B\[[0-9;]*[A-Za-z]/g, "");
   out = out.replace(/\x1B\][^\x07]*\x07/g, "");
   out = out.replace(/\x1B\([A-Za-z0-9]/g, "");
-  out = out.replace(/[\x00-\x1F\x7F]/g, "");
+  // control characters (including \n and \t) must be replaced by a single space, not deleted
+  out = out.replace(/[\x00-\x1F\x7F]/g, " ");
+  // delete invisible and direction-control characters
+  out = out.replace(INVISIBLE_RE, "");
+  out = out.replace(TAG_RE, "");
   out = out.replace(/\s+/g, " ").trim();
   if (out.length > CONFIG.REVIEWER_REASON_MAX_LENGTH) {
     out = out.slice(0, CONFIG.REVIEWER_REASON_MAX_LENGTH);
@@ -112,11 +130,18 @@ function parseContent(content: string): unknown {
   }
 }
 
-export async function reviewTool(tool: Record<string, unknown>): Promise<{ suspicious: boolean; reason: string }> {
+export async function reviewTool(
+  tool: Record<string, unknown>,
+  opts?: { timeoutMs?: number; retryDelaysMs?: number[]; sleep?: (ms: number) => Promise<void> }
+): Promise<{ suspicious: boolean; reason: string }> {
   const apiKey = process.env.BASETEN_API_KEY;
   if (!apiKey) {
     throw new ReviewerError("BASETEN_API_KEY is not set");
   }
+
+  const timeoutMs = opts?.timeoutMs ?? CONFIG.REVIEWER_TIMEOUT_MS;
+  const retryDelaysMs = opts?.retryDelaysMs ?? [...CONFIG.REVIEWER_RETRY_DELAYS_MS];
+  const sleep = opts?.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
   const sanitized = sanitizeIcons(tool);
   const serialized = canonicalize(sanitized);
@@ -149,7 +174,7 @@ export async function reviewTool(tool: Record<string, unknown>): Promise<{ suspi
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), CONFIG.REVIEWER_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const res = await fetch(ENDPOINT, {
@@ -169,7 +194,10 @@ export async function reviewTool(tool: Record<string, unknown>): Promise<{ suspi
         }
         if (status === 429 || (status >= 500 && status <= 599)) {
           lastError = new ReviewerError(`Baseten API request failed with status ${status}`, status);
-          if (attempt < 2) continue;
+          if (attempt < 2) {
+            await sleep(retryDelaysMs[attempt] ?? 0);
+            continue;
+          }
           throw lastError;
         }
         throw new ReviewerError(`Baseten API request failed with status ${status}`, status);
@@ -231,12 +259,18 @@ export async function reviewTool(tool: Record<string, unknown>): Promise<{ suspi
       const e = err as Error;
       if (e.name === "AbortError") {
         lastError = new ReviewerError("Request timed out");
-        if (attempt < 2) continue;
+        if (attempt < 2) {
+          await sleep(retryDelaysMs[attempt] ?? 0);
+          continue;
+        }
         throw lastError;
       }
 
       lastError = new ReviewerError("Network error");
-      if (attempt < 2) continue;
+      if (attempt < 2) {
+        await sleep(retryDelaysMs[attempt] ?? 0);
+        continue;
+      }
       throw lastError;
     } finally {
       clearTimeout(timeoutId);

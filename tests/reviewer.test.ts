@@ -113,7 +113,10 @@ describe("reviewer – mocked fetch", () => {
       if (calls === 1) return mockResponse(500, { error: "server" });
       return mockResponse(200, mockOuter(JSON.stringify({ suspicious: false, reason: "ok after retry" })));
     };
-    const res = await reviewTool({ name: "t", inputSchema: { type: "object" } });
+    const res = await reviewTool(
+      { name: "t", inputSchema: { type: "object" } },
+      { sleep: () => Promise.resolve() }
+    );
     assert.equal(calls, 2);
     assert.equal(res.reason, "ok after retry");
   });
@@ -126,10 +129,13 @@ describe("reviewer – mocked fetch", () => {
       (err as any).name = "AbortError";
       throw err;
     };
-    await assert.rejects(() => reviewTool({ name: "t", inputSchema: { type: "object" } }), (e: any) => {
-      assert.ok(e instanceof ReviewerError);
-      return true;
-    });
+    await assert.rejects(
+      () => reviewTool({ name: "t", inputSchema: { type: "object" } }, { sleep: () => Promise.resolve() }),
+      (e: any) => {
+        assert.ok(e instanceof ReviewerError);
+        return true;
+      }
+    );
     assert.equal(calls, 3);
   });
   it("missing key throws", async () => {
@@ -189,11 +195,14 @@ describe("reviewer – mocked fetch", () => {
     const secret = "super-secret-key-12345-UNIQUE";
     setKey(secret);
     global.fetch = async () => mockResponse(500, { error: "fail" });
-    await assert.rejects(() => reviewTool({ name: "t", inputSchema: { type: "object" } }), (e: any) => {
-      assert.ok(e instanceof ReviewerError);
-      assert.equal(e.message.includes(secret), false, "error should not contain key");
-      return true;
-    });
+    await assert.rejects(
+      () => reviewTool({ name: "t", inputSchema: { type: "object" } }, { sleep: () => Promise.resolve() }),
+      (e: any) => {
+        assert.ok(e instanceof ReviewerError);
+        assert.equal(e.message.includes(secret), false, "error should not contain key");
+        return true;
+      }
+    );
     global.fetch = async () => mockResponse(200, mockOuter(JSON.stringify({ suspicious: false, reason: "ok" }), { reasoning_content: secret } as any));
     const res = await reviewTool({ name: "t", inputSchema: { type: "object" } });
     assert.equal(res.reason.includes(secret), false);
@@ -208,12 +217,27 @@ describe("reviewer – mocked fetch", () => {
     const tool = {
       name: "t",
       inputSchema: { type: "object" },
-      icons: [{ src: "https://example.com/secret.png", width: 100 }],
+      icons: [{ src: "data:image/png;base64,abc123", width: 100 }],
     };
     await reviewTool(tool as any);
     const userContent: string = capturedBody.messages[1].content as string;
     assert.ok(userContent.includes("[omitted]"));
-    assert.equal(userContent.includes("https://example.com/secret.png"), false);
+    assert.equal(userContent.includes("data:image/png;base64,abc123"), false);
+    // https URL should be kept
+    let capturedBody2: any = null;
+    global.fetch = async (_url: any, opts: any) => {
+      capturedBody2 = JSON.parse(opts.body as string);
+      return mockResponse(200, mockOuter(JSON.stringify({ suspicious: false, reason: "ok" })));
+    };
+    const tool2 = {
+      name: "t",
+      inputSchema: { type: "object" },
+      icons: [{ src: "https://example.com/icon.png", width: 100 }],
+    };
+    await reviewTool(tool2 as any);
+    const userContent2: string = capturedBody2.messages[1].content as string;
+    assert.ok(userContent2.includes("https://example.com/icon.png"));
+    assert.equal(userContent2.includes("[omitted]"), false);
   });
 
   it("other 4xx (400) does not retry", async () => {
@@ -236,7 +260,7 @@ describe("reviewer – mocked fetch", () => {
       if (calls === 1) return mockResponse(429, { error: "rate limit" });
       return mockResponse(200, mockOuter(JSON.stringify({ suspicious: false, reason: "after 429" })));
     };
-    const res = await reviewTool({ name: "t", inputSchema: { type: "object" } });
+    const res = await reviewTool({ name: "t", inputSchema: { type: "object" } }, { sleep: () => Promise.resolve() });
     assert.equal(calls, 2);
     assert.equal(res.reason, "after 429");
   });
@@ -250,5 +274,100 @@ describe("reviewer – mocked fetch", () => {
     await assert.rejects(() => reviewTool({ name: "t", inputSchema: { type: "object" } }));
     assert.equal(calls, 3);
   });
+
+  it('foo newline bar becomes foo bar', async () => {
+    global.fetch = async () =>
+      mockResponse(200, mockOuter(JSON.stringify({ suspicious: false, reason: "foo\nbar" })));
+    const res = await reviewTool({ name: "t", inputSchema: { type: "object" } });
+    assert.equal(res.reason, "foo bar");
+  });
+
+  it("reason with invisible chars is cleaned", async () => {
+    const tag = String.fromCodePoint(0xe0041);
+    const reasonWithInvisible = `a\u200Bb\u202Ec\uFEFFd${tag}e`;
+    global.fetch = async () =>
+      mockResponse(200, mockOuter(JSON.stringify({ suspicious: false, reason: reasonWithInvisible })));
+    const res = await reviewTool({ name: "t", inputSchema: { type: "object" } });
+    assert.equal(res.reason.includes("\u200B"), false);
+    assert.equal(res.reason.includes("\u202E"), false);
+    assert.equal(res.reason.includes("\uFEFF"), false);
+    assert.equal(res.reason.includes(tag), false);
+    assert.equal(res.reason, "abcde");
+  });
+
+  it("real timeout path with abort signal", async () => {
+    let calls = 0;
+    global.fetch = ((_url: any, opts: any) =>
+      new Promise((_resolve, reject) => {
+        calls++;
+        const onAbort = () => {
+          const err = new Error("aborted");
+          (err as any).name = "AbortError";
+          reject(err);
+        };
+        if (opts?.signal?.aborted) {
+          onAbort();
+        } else {
+          opts.signal.addEventListener("abort", onAbort, { once: true });
+        }
+      })) as any;
+    await assert.rejects(
+      () => reviewTool({ name: "t", inputSchema: { type: "object" } }, { timeoutMs: 20, sleep: () => Promise.resolve() }),
+      (e: any) => {
+        assert.ok(e instanceof ReviewerError);
+        return true;
+      }
+    );
+    assert.equal(calls, 3);
+  });
+
+  it("backoff delays on 429/5xx and not on JSON failure", async () => {
+    // 429 then 500 then success -> sleep 1000 then 2000
+    let calls = 0;
+    const sleeps: number[] = [];
+    const recordSleep = async (ms: number) => {
+      sleeps.push(ms);
+    };
+    global.fetch = async () => {
+      calls++;
+      if (calls === 1) return mockResponse(429, { error: "rate limit" });
+      if (calls === 2) return mockResponse(500, { error: "server" });
+      return mockResponse(200, mockOuter(JSON.stringify({ suspicious: true, reason: "ok" })));
+    };
+    const res = await reviewTool({ name: "t", inputSchema: { type: "object" } }, { sleep: recordSleep });
+    assert.equal(calls, 3);
+    assert.deepEqual(sleeps, [...CONFIG.REVIEWER_RETRY_DELAYS_MS]);
+    assert.equal(res.suspicious, true);
+
+    // JSON failure must NOT call sleep
+    let sleeps2: number[] = [];
+    let calls2 = 0;
+    global.fetch = async () => {
+      calls2++;
+      if (calls2 === 1) return mockResponse(200, mockOuter("not json {"));
+      return mockResponse(200, mockOuter(JSON.stringify({ suspicious: false, reason: "second" })));
+    };
+    const res2 = await reviewTool(
+      { name: "t", inputSchema: { type: "object" } },
+      {
+        sleep: async (ms: number) => {
+          sleeps2.push(ms);
+        },
+      }
+    );
+    assert.equal(calls2, 2);
+    assert.equal(sleeps2.length, 0);
+    assert.equal(res2.reason, "second");
+  });
+
+  it("content with two JSON objects uses last one", async () => {
+    const content =
+      'prefix {"suspicious": false, "reason": "first"} middle {"suspicious": true, "reason": "second"} suffix';
+    global.fetch = async () => mockResponse(200, mockOuter(content));
+    const res = await reviewTool({ name: "t", inputSchema: { type: "object" } });
+    assert.equal(res.suspicious, true);
+    assert.equal(res.reason, "second");
+  });
 });
+
 

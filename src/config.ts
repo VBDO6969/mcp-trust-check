@@ -41,4 +41,7 @@ export const CONFIG = {
 
   /** Reviewer: max reason length after cleaning (chars). Proposal. */
   REVIEWER_REASON_MAX_LENGTH: 300 as const,
+
+  /** Reviewer: retry delays for 429/5xx/network/timeout (ms). Proposal. */
+  REVIEWER_RETRY_DELAYS_MS: [1_000, 2_000] as const,
 } as const;
