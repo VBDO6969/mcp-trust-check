@@ -295,6 +295,54 @@ describe("reviewer – mocked fetch", () => {
     assert.equal(res.reason, "abcde");
   });
 
+  it("reason with new invisible chars U+061C U+2060 U+00AD U+180E is cleaned", async () => {
+    const chars = "\u061C\u2060\u206F\u00AD\u180E";
+    const reasonWithNew = `x${chars}y`;
+    global.fetch = async () =>
+      mockResponse(200, mockOuter(JSON.stringify({ suspicious: false, reason: reasonWithNew })));
+    const res = await reviewTool({ name: "t", inputSchema: { type: "object" } });
+    for (const ch of chars) assert.equal(res.reason.includes(ch), false);
+    assert.equal(res.reason, "xy");
+  });
+
+  it("localhost override is used", async () => {
+    const origEndpoint = process.env.MCP_TRUST_CHECK_REVIEWER_ENDPOINT;
+    process.env.MCP_TRUST_CHECK_REVIEWER_ENDPOINT = "http://127.0.0.1:12345/v1/chat/completions";
+    let fetchUrl: string | null = null;
+    global.fetch = async (url: any) => {
+      fetchUrl = url as string;
+      return mockResponse(200, mockOuter(JSON.stringify({ suspicious: false, reason: "ok" })));
+    };
+    try {
+      const res = await reviewTool({ name: "t", inputSchema: { type: "object" } });
+      assert.equal(res.reason, "ok");
+      assert.equal(fetchUrl, "http://127.0.0.1:12345/v1/chat/completions");
+    } finally {
+      if (origEndpoint === undefined) delete process.env.MCP_TRUST_CHECK_REVIEWER_ENDPOINT;
+      else process.env.MCP_TRUST_CHECK_REVIEWER_ENDPOINT = origEndpoint;
+    }
+  });
+
+  it("https://evil.example is refused with zero fetch calls", async () => {
+    const origEndpoint = process.env.MCP_TRUST_CHECK_REVIEWER_ENDPOINT;
+    process.env.MCP_TRUST_CHECK_REVIEWER_ENDPOINT = "https://evil.example/v1/chat/completions";
+    let calls = 0;
+    global.fetch = async () => {
+      calls++;
+      return mockResponse(200, mockOuter(JSON.stringify({ suspicious: false, reason: "ok" })));
+    };
+    try {
+      await assert.rejects(() => reviewTool({ name: "t", inputSchema: { type: "object" } }), (e: any) => {
+        assert.ok(e instanceof ReviewerError);
+        return true;
+      });
+      assert.equal(calls, 0);
+    } finally {
+      if (origEndpoint === undefined) delete process.env.MCP_TRUST_CHECK_REVIEWER_ENDPOINT;
+      else process.env.MCP_TRUST_CHECK_REVIEWER_ENDPOINT = origEndpoint;
+    }
+  });
+
   it("real timeout path with abort signal", async () => {
     let calls = 0;
     global.fetch = ((_url: any, opts: any) =>

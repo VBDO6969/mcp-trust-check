@@ -25,7 +25,7 @@ Target: developer who installs third-party MCP servers and wants gate before tru
   - diff.ts: pure, by name: added, removed, changed (recursive field paths). Unchanged not listed.
   - CLI: approve/check as per README. TTY prompt via readline; non-TTY without --accept exits 1, never overwrites silently. Exit codes: 0 approved/unchanged, 1 differences/validation, 2 operational.
   - Decisions: x_hidden hashed (warning only); threshold 64 not 32; icons[].src exempt; overlap 0.5 proposal; identity limitation documented.
-- Layer 2, LLM reviewer: planned, not implemented. Sends descriptions to Muse Spark Open, returns {suspicious, reason, category} advisory.
+- Layer 2, LLM reviewer: DONE (2026-05-13). Sends full tool definition as canonicalized JSON with data: icons omitted to Baseten https://inference.baseten.co/v1/chat/completions model meta-models/muse-spark-open-1026, only when there is added/changed text to review (otherwise no call, no key needed). Worker pool review-runner.ts (concurrency 4, deadline 300_000 proposals), per-tool reviewTool with retries, prompt-injection mitigated via per-call delimiter (not eliminated). Prints [REVIEW] lines + summary, exit codes: reviewer failure -> Error: ... exit 2, approve --accept bypasses flagged with WARNING, non-TTY without --accept refuses with flagged count, check with diff and nothing flagged -> exit 0 with Baseline NOT updated (check never writes). Endpoint seam MCP_TRUST_CHECK_REVIEWER_ENDPOINT http://127.0.0.1/localhost only. No accuracy numbers (eval not built), advisory only.
 - Layer 3, Sandbox: stretch goal, may be cut. Docker + canary.
 
 
@@ -34,10 +34,9 @@ Target: developer who installs third-party MCP servers and wants gate before tru
 - baselines/ gitignored. Layer 1 reads/writes; Layer 0 only returns tools.
 
 ## Approve/check contract and exit codes
-- approve: 0 approved/unchanged, 1 differences/validation not confirmed, 2 operational error.
-- check: 0 unchanged+valid, 1 differences/validation (provisional until Layer 2), 2 operational (no baseline -> 2, advise run approve).
-- Both print "LLM review and sandbox are not implemented yet." and keep protocolViolations.
-- Identity limitation: identity = key from command+args or --name, plus tool-name overlap; server that changes launch command AND renames all tools is treated as new and goes through first-approval screening.
+- approve: 0 approved/unchanged, 1 differences/validation not confirmed, 2 operational (including reviewer failure, missing BASETEN_API_KEY). LLM only when there is added/changed text; otherwise no call, no key needed. Reviewer prints [REVIEW] lines + summary; flagged requires confirmation with " (reviewer flagged M tool(s))" suffix, non-TTY without --accept -> "Not a TTY... (reviewer flagged M tool(s))." exit 1, --accept bypasses with WARNING.
+- check: 0 unchanged+valid (no LLM), 1 differences/validation, 1 flagged diff (with [REVIEW] lines), 0 diff but nothing flagged with "Reviewer found nothing suspicious... Baseline NOT updated" (check never writes, exit 0), 1 related baseline (no LLM), 2 no baseline. Validation errors reworded without "provisional". Keeps "Sandbox verification is not implemented yet." and drops all "LLM review ... not implemented" messages.
+- Both keep protocolViolations.
 
 ## Security rules
 - MCP servers are untrusted code running with user privileges. Test only against own dummy servers or servers named explicitly.

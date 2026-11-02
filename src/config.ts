@@ -44,4 +44,10 @@ export const CONFIG = {
 
   /** Reviewer: retry delays for 429/5xx/network/timeout (ms). Proposal. */
   REVIEWER_RETRY_DELAYS_MS: [1_000, 2_000] as const,
+
+  /** Reviewer runner: concurrency (proposal). */
+  REVIEW_CONCURRENCY: 4 as const,
+
+  /** Reviewer runner: overall deadline ms (proposal). */
+  REVIEW_DEADLINE_MS: 300_000 as const,
 } as const;

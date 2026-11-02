@@ -18,13 +18,13 @@ Protects developers from malicious MCP servers - **tool poisoning** and **rug pu
 3. Exit codes: 0 approved/unchanged, 1 differences/validation not confirmed, 2 operational error.
 
 ### Check contract
-Same detection/diff, never writes. No exact and no related -> exit 2 "run approve". Exit 0 unchanged+valid; 1 differences/validation (provisional until Layer 2); 2 operational. Prints "LLM review and sandbox are not implemented yet."
+Same detection/diff, never writes. No exact and no related -> exit 2 "run approve". For exact baseline: validation errors -> exit 1 (no LLM); no diff -> "check passed: unchanged and valid", exit 0, no LLM; diff with added/changed -> LLM review on those tools. Related baseline without exact: prints diff, exit 1, no LLM. Exit 0 when reviewer finds nothing suspicious because check never writes (run `approve` to accept). Still prints "Sandbox verification is not implemented yet."
 
 ## Architecture
 
 - **Layer 0 - MCP client: DONE.** SDK v2 (client 2.4.0, server 2.4.0, zod 4). Dual lifecycle modern server/discover (2026-07-28) first, fallback legacy. fetchToolDefinitions returns {lifecycle, protocolVersion?, tools (FULL raw via passthrough), protocolViolations, protocolViolationCount}. Passive listener on _process.stdout counts non-JSON stdout.
 - **Layer 1 - Validate + Diff: DONE.** See below.
-- **Layer 2 - LLM reviewer: planned.** Muse Spark Open via Baseten https://inference.baseten.co/v1, model meta-models/muse-spark-open-1026. Advisory only.
+- **Layer 2 - LLM reviewer: DONE.** Sends **full tool definition as JSON** (with `data:` icon URIs replaced by `"[omitted]"`, serialized via `canonicalize`) to Baseten `https://inference.baseten.co/v1/chat/completions` (`meta-models/muse-spark-open-1026`), not analyzed locally. Only called when there is added/changed tool text to review; otherwise no API call and no key required. Concurrency `CONFIG.REVIEW_CONCURRENCY=4`, deadline `CONFIG.REVIEW_DEADLINE_MS=300_000` (proposals). Prints per-flagged `[REVIEW] <tool> :: SUSPICIOUS :: <reason>` and summary `Reviewer: N tool(s) reviewed, M flagged (advisory, not a guarantee)`. Exit codes: reviewer failure (including missing `BASETEN_API_KEY`) -> `Error: ...` exit 2; `approve` with flagged but `--accept` bypasses with `WARNING: --accept given...`; non-TTY without `--accept` refuses with `Not a TTY... (reviewer flagged M tool(s)).` `check` with diff but nothing flagged → `Reviewer found nothing suspicious... Baseline NOT updated; run approve to accept this change.` + `Sandbox verification is not implemented yet.` and exit 0 (check never writes). Prompt-injection of reviewer is mitigated via per-call delimiter + instruction that data between delimiters is untrusted, not eliminated. Endpoint seam: set `MCP_TRUST_CHECK_REVIEWER_ENDPOINT=http://127.0.0.1:<port>/v1/chat/completions` (only `http:` + `127.0.0.1`/`localhost` allowed) for local testing. **No accuracy numbers – eval set not built, advisory not a guarantee.**
 - **Layer 3 - Sandbox: stretch goal.** Docker + canary file.
 
 ## Layer 1 details
