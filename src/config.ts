@@ -32,4 +32,13 @@ export const CONFIG = {
     "_meta",
     "icons",
   ]),
+
+  /** Reviewer: Baseten API timeout per attempt (ms). Proposal, not from spec. */
+  REVIEWER_TIMEOUT_MS: 60_000 as const,
+
+  /** Reviewer: max serialized tool definition length (chars) before refusing to send. Proposal. */
+  REVIEWER_MAX_SERIALIZED_LENGTH: 30_000 as const,
+
+  /** Reviewer: max reason length after cleaning (chars). Proposal. */
+  REVIEWER_REASON_MAX_LENGTH: 300 as const,
 } as const;
