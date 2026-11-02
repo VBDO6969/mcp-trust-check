@@ -24,7 +24,8 @@
     "demo:rug-pull:approve": "tsx --env-file=.env src/cli.ts approve -- npx tsx src/dummy-server-rug-pull.ts",
     "demo:rug-pull:check": "tsx --env-file=.env src/cli.ts check -- npx tsx src/dummy-server-rug-pull.ts",
     "demo:rug-pull:approve:accept": "tsx --env-file=.env src/cli.ts approve --accept -- npx tsx src/dummy-server-rug-pull.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json"
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "eval:reviewer": "tsx --env-file=.env scripts/eval-reviewer.ts"
   },
   "keywords": [
     "mcp",
