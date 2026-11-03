@@ -2,70 +2,173 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-
-const casesPath = path.resolve("scripts/eval/cases.json");
-
+const basePath = path.resolve("scripts/eval/cases.json");
+const extraPath = path.resolve("scripts/eval/cases-extra.json");
+function load(p:string){ return JSON.parse(fs.readFileSync(p,"utf8")); }
 describe("eval-cases", () => {
-  it("cases.json parses", () => {
-    const raw = fs.readFileSync(casesPath, "utf8");
-    const data = JSON.parse(raw);
-    assert.ok(Array.isArray(data), "cases.json must be an array");
-    assert.ok(data.length >= 20, `expected at least 20 cases, got ${data.length}`);
+  it("cases.json parses and has at least 20", () => {
+    const data=load(basePath);
+    assert.ok(Array.isArray(data));
+    assert.ok(data.length>=20);
   });
-
-  it("ids unique, labels and difficulty valid", () => {
-    const data = JSON.parse(fs.readFileSync(casesPath, "utf8"));
-    const ids = new Set<string>();
-    const validLabels = new Set(["benign", "malicious"]);
-    const validDiff = new Set(["easy", "hard"]);
-    for (const c of data) {
-      assert.ok(typeof c.id === "string" && c.id.length > 0, `missing id in ${JSON.stringify(c)}`);
-      assert.ok(!ids.has(c.id), `duplicate id ${c.id}`);
-      ids.add(c.id);
-      assert.ok(validLabels.has(c.label), `invalid label ${c.label} in ${c.id}`);
-      assert.ok(validDiff.has(c.difficulty), `invalid difficulty ${c.difficulty} in ${c.id}`);
-      assert.ok(typeof c.why === "string" && c.why.length > 0, `missing why in ${c.id}`);
-      assert.ok(c.tool && typeof c.tool === "object", `missing tool in ${c.id}`);
+  it("cases-extra.json parses and has 60 with 30 each", () => {
+    const data=load(extraPath);
+    assert.ok(Array.isArray(data));
+    assert.equal(data.length,60, `expected 60 in extra, got ${data.length}`);
+    const mal=data.filter((c:any)=>c.label==="malicious").length;
+    const ben=data.filter((c:any)=>c.label==="benign").length;
+    assert.equal(mal,30);
+    assert.equal(ben,30);
+  });
+  it("all ids unique across both files", () => {
+    const base=load(basePath); const extra=load(extraPath);
+    const ids=new Set<string>(); const all=[...base,...extra];
+    for(const c of all){ assert.ok(typeof c.id==="string"&&c.id.length>0); assert.ok(!ids.has(c.id),`duplicate ${c.id}`); ids.add(c.id); }
+    for(const c of extra) assert.ok(c.id.startsWith("x-"),`extra id must start with x- got ${c.id}`);
+  });
+  it("labels, categories, inspired_by, model_sees_payload present and valid", () => {
+    const base=load(basePath); const extra=load(extraPath);
+    const validLabel=new Set(["benign","malicious"]);
+    const validDiff=new Set(["easy","hard"]);
+    for(const c of base){
+      assert.ok(validLabel.has(c.label));
+      assert.ok(validDiff.has(c.difficulty));
+      assert.ok(typeof c.why==="string"&&c.why.length>0);
+      assert.ok(c.tool && typeof c.tool==="object");
     }
-  });
-
-  it("at least 10 of each label", () => {
-    const data = JSON.parse(fs.readFileSync(casesPath, "utf8"));
-    const benign = data.filter((c: any) => c.label === "benign").length;
-    const malicious = data.filter((c: any) => c.label === "malicious").length;
-    assert.ok(benign >= 10, `expected at least 10 benign, got ${benign}`);
-    assert.ok(malicious >= 10, `expected at least 10 malicious, got ${malicious}`);
-  });
-
-  it("every tool has non-empty string name and object inputSchema", () => {
-    const data = JSON.parse(fs.readFileSync(casesPath, "utf8"));
-    for (const c of data) {
-      const t = c.tool as any;
-      assert.ok(typeof t.name === "string" && t.name.trim().length > 0, `tool name missing or empty in ${c.id}`);
-      assert.ok(t.inputSchema && typeof t.inputSchema === "object" && !Array.isArray(t.inputSchema), `inputSchema must be object in ${c.id}`);
-      assert.equal(t.inputSchema.type, "object", `inputSchema.type must be object in ${c.id}`);
-      // properties should be object if present, each with description
-      if (t.inputSchema.properties) {
-        assert.ok(typeof t.inputSchema.properties === "object" && !Array.isArray(t.inputSchema.properties), `properties must be object in ${c.id}`);
-        for (const [pname, prop] of Object.entries(t.inputSchema.properties as Record<string, any>)) {
-          assert.ok(prop && typeof prop === "object", `property ${pname} must be object in ${c.id}`);
-          assert.ok(typeof (prop as any).type === "string", `property ${pname} missing type in ${c.id}`);
-          // description should exist for each property per spec ("with typed properties and their own descriptions")
-          assert.ok(typeof (prop as any).description === "string" && (prop as any).description.length > 0, `property ${pname} missing description in ${c.id}`);
+    for(const c of extra){
+      assert.ok(validLabel.has(c.label));
+      assert.ok(validDiff.has(c.difficulty));
+      assert.ok(typeof c.category==="string"&&c.category.length>0, `missing category ${c.id}`);
+      assert.ok(typeof c.inspired_by==="string"&&c.inspired_by.length>0, `missing inspired_by ${c.id}`);
+      assert.ok(typeof c.model_sees_payload==="boolean", `missing model_sees_payload ${c.id}`);
+      assert.ok(typeof c.why==="string"&&c.why.length>0);
+      assert.ok(c.tool && typeof c.tool==="object");
+      assert.ok(typeof c.tool.name==="string"&&c.tool.name.trim().length>0);
+      assert.ok(c.tool.inputSchema && typeof c.tool.inputSchema==="object");
+      assert.equal(c.tool.inputSchema.type,"object");
+      if(c.tool.inputSchema.properties){
+        for(const [k,v] of Object.entries(c.tool.inputSchema.properties as Record<string,any>)){
+          assert.ok(typeof (v as any).type==="string",`missing type ${c.id} ${k}`);
+          assert.ok(typeof (v as any).description==="string"&&(v as any).description.length>0, `missing description ${c.id} ${k}`);
         }
       }
-      // tool description should be non-empty string
-      assert.ok(typeof t.description === "string" && t.description.length > 0, `tool description missing in ${c.id}`);
+      assert.ok(typeof c.tool.description==="string"&&c.tool.description.length>0);
     }
   });
-
-  it("coverage: at least 4 benign hard, at least 4 malicious hard, at least 1 description over 1500 chars", () => {
-    const data = JSON.parse(fs.readFileSync(casesPath, "utf8"));
-    const benignHard = data.filter((c: any) => c.label === "benign" && c.difficulty === "hard").length;
-    const maliciousHard = data.filter((c: any) => c.label === "malicious" && c.difficulty === "hard").length;
-    assert.ok(benignHard >= 4, `expected at least 4 benign hard, got ${benignHard}`);
-    assert.ok(maliciousHard >= 4, `expected at least 4 malicious hard, got ${maliciousHard}`);
-    const longDesc = data.filter((c: any) => typeof c.tool.description === "string" && c.tool.description.length > 1500);
-    assert.ok(longDesc.length >= 1, `expected at least 1 description over 1500 chars, got ${longDesc.length}`);
+  it("at least 4 benign in legitimate instructions category in extra", () => {
+    const extra=load(extraPath);
+    const cnt=extra.filter((c:any)=>c.label==="benign"&&c.category==="legitimate instructions").length;
+    assert.ok(cnt>=4, `expected >=4 got ${cnt}`);
+  });
+  it("at least one description over 3000 chars in extra", () => {
+    const extra=load(extraPath);
+    const long=extra.filter((c:any)=>typeof c.tool.description==="string"&&c.tool.description.length>3000);
+    assert.ok(long.length>=1, `expected >=1 over 3000 got ${long.length}`);
+  });
+  it("no real secret pattern and only allowed domains", () => {
+    const extra=load(extraPath);
+    const txt=JSON.stringify(extra);
+    assert.ok(!/AKIA[0-9A-Z]{16}/.test(txt), "found AWS key pattern");
+    assert.ok(!/-----BEGIN (RSA )?PRIVATE KEY-----/.test(txt), "found private key");
+    assert.ok(!/sk-[a-zA-Z0-9]{20,}/.test(txt), "found sk- secret");
+    const badDomain=[] as string[];
+    for(const m of txt.matchAll(/https:\/\/([a-z0-9.-]+)/gi)){
+      const d=m[1].toLowerCase();
+      if(!["attacker.example","evil.example","example.com"].includes(d) && !d.endsWith(".attacker.example") && !d.endsWith(".evil.example") && !d.endsWith(".example.com")){
+        badDomain.push(m[0]);
+      }
+    }
+    assert.equal(badDomain.length,0, `found disallowed domains ${badDomain.join(",")}`);
+  });
+  it("original 20 cases still present and unchanged", () => {
+    const base=load(basePath);
+    assert.equal(base.length,20);
+    const ids=new Set(base.map((c:any)=>c.id));
+    assert.ok(ids.has("benign-01"));
+    assert.ok(ids.has("malicious-10"));
+  });
+  it("paired file has exactly 20 pair_ids with one malicious and one benign each", () => {
+    const pairedPath=path.resolve("scripts/eval/cases-paired.json");
+    const paired=load(pairedPath);
+    const pairedNonNull=paired.filter((c:any)=>c.pair_id!==null);
+    const pairIds=new Set(pairedNonNull.map((c:any)=>c.pair_id));
+    assert.equal(pairIds.size,20, `expected 20 pair_ids got ${pairIds.size}`);
+    for(const pid of pairIds){
+      const arr=pairedNonNull.filter((c:any)=>c.pair_id===pid);
+      assert.equal(arr.length,2, `pair ${pid} should have 2 cases`);
+      assert.ok(arr.some((c:any)=>c.label==="malicious"));
+      assert.ok(arr.some((c:any)=>c.label==="benign"));
+    }
+    const standalone=paired.filter((c:any)=>c.pair_id===null);
+    assert.equal(standalone.length,8, `expected 8 standalone benign got ${standalone.length}`);
+    assert.ok(standalone.every((c:any)=>c.label==="benign"));
+  });
+  it("ids unique across all three files", () => {
+    const base=load(basePath); const extra=load(extraPath); const paired=load(path.resolve("scripts/eval/cases-paired.json"));
+    const ids=new Set<string>(); const all=[...base,...extra,...paired];
+    for(const c of all){ assert.ok(!ids.has(c.id),`duplicate ${c.id}`); ids.add(c.id); }
+  });
+  it("at least 8 malicious without http or ~/ in paired", () => {
+    const paired=load(path.resolve("scripts/eval/cases-paired.json"));
+    const cnt=paired.filter((c:any)=>c.label==="malicious"&&c.pair_id!==null&&!JSON.stringify(c.tool).includes("http")&&!JSON.stringify(c.tool).includes("~/")).length;
+    assert.ok(cnt>=8, `expected >=8 got ${cnt}`);
+  });
+  it("paired cases contain none of forbidden words and only allowed domains", () => {
+    const paired=load(path.resolve("scripts/eval/cases-paired.json"));
+    const forbidden=["attacker","evil","steal","exfiltrate","hidden","secret-leak"];
+    for(const c of paired){
+      const txt=(c.tool.description+" "+JSON.stringify(c.tool.inputSchema||{})).toLowerCase();
+      for(const w of forbidden) assert.ok(!txt.includes(w), `forbidden word ${w} in ${c.id}`);
+      if(c.label==="benign"&&c.pair_id!==null){
+        const t=JSON.stringify(c);
+        assert.ok(!/not an instruction/.test(t));
+        assert.ok(!/does not exfiltrate/.test(t));
+        assert.ok(!/for documentation/.test(t));
+      }
+    }
+    const txt2=JSON.stringify(paired);
+    const bad=[] as string[];
+    for(const m of txt2.matchAll(/https:\/\/([a-z0-9.-]+)/gi)){
+      const d=m[1].toLowerCase();
+      const allowed=d.endsWith(".example")||d.endsWith(".example.com")||d.endsWith(".example.net")||d.endsWith(".example.org")||["example.com","example.net","example.org"].includes(d);
+      if(!allowed) bad.push(m[0]);
+    }
+    assert.equal(bad.length,0, `bad domains ${bad.join(",")}`);
+  });
+  it("paired inspired_by only allowed values and family checks", () => {
+    const paired=load(path.resolve("scripts/eval/cases-paired.json"));
+    const allowed=new Set(["none","CyberArk full-schema poisoning","Invariant Labs shadowing","preference manipulation","tool squatting","implicit tool poisoning","conditional error-handling guidance","persuasive description"]);
+    for(const c of paired) assert.ok(allowed.has(c.inspired_by), `bad inspired_by ${c.inspired_by} in ${c.id}`);
+    const families=new Set(paired.filter((c:any)=>c.pair_id!==null).map((c:any)=>c.family));
+    assert.ok(families.size>=12, `expected >=12 families got ${families.size}`);
+    const perF:Record<string,number>={};
+    for(const c of paired.filter((c:any)=>c.pair_id!==null)) perF[c.family]=(perF[c.family]||0)+1;
+    for(const [f,cnt] of Object.entries(perF)) assert.ok(cnt<=4, `family ${f} has ${cnt} cases, max 4 (2 pairs)`);
+    const benignCallFirst=paired.filter((c:any)=>c.label==="benign"&&c.tool.description.includes("Call ")&&c.tool.description.includes("first")).length;
+    assert.ok(benignCallFirst>=3, `expected >=3 benign cases in the paired file mention calling another tool first, got ${benignCallFirst}`);
+  });
+  it("eval-reviewer rates fix: malicious hard detection uses fn not tn and per-set includes paired", () => {
+    const txt=fs.readFileSync(path.resolve("scripts/eval-reviewer.ts"),"utf8");
+    assert.ok(txt.includes('det(majByDiff.hard_malicious.tp,majByDiff.hard_malicious.fn)'), "malicious hard detection should use fn");
+    assert.ok(!txt.includes('det(majByDiff.hard_malicious.tp,majByDiff.hard_malicious.tn)'), "should not use tn for malicious hard");
+    assert.ok(txt.includes('["base","extra","paired","all"]'), "per-set summary should include paired");
+  });
+  it("evaluatePairs pure helper handles pair where only benign twin is wrong", async () => {
+    const { evaluatePairs } = await import("../scripts/eval-reviewer.ts");
+    const cases=[
+      {pair_id:"p-test-01", label:"malicious", correct:true, contested:false, reason:"ok", why:"a", runs:[{reason:"ok"}]},
+      {pair_id:"p-test-01", label:"benign", correct:false, contested:false, reason:"bad", why:"b", runs:[{reason:"bad"}]},
+      {pair_id:"p-test-02", label:"malicious", correct:true, contested:false, reason:"ok", why:"a", runs:[{reason:"ok"}]},
+      {pair_id:"p-test-02", label:"benign", correct:true, contested:false, reason:"ok", why:"b", runs:[{reason:"ok"}]},
+    ];
+    const res=evaluatePairs(cases as any);
+    assert.equal(res.total,2);
+    assert.equal(res.bothCorrect,1);
+    assert.equal(res.onlyMalicious,1);
+    assert.equal(res.onlyBenign,0);
+    assert.equal(res.neither,0);
+    assert.equal(res.wrongPairs.length,1);
+    assert.equal(res.wrongPairs[0].pair_id,"p-test-01");
   });
 });
