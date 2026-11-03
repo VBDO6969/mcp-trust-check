@@ -8,7 +8,7 @@ Target: developer who installs third-party MCP servers and wants gate before tru
 
 ## Hackathon constraints
 - Repo must be fresh and public, containing only work done during event (Oct 27 - Nov 4, 2026).
-- LLM: Muse Spark Open via Baseten, endpoint https://inference.baseten.co/v1, model meta-models/muse-spark-open-1026. JSON extracted from reasoning, zod-validated; retry on failure.
+- LLM: Muse Spark Open via Baseten, endpoint https://inference.baseten.co/v1, model meta-models/muse-spark-open-1026. JSON extracted from choices[0].message.content (never from reasoning_content), zod-validated; retry on 429/5xx/network/timeout with backoff, 3 attempts total.
 - API key only from env BASETEN_API_KEY. Never commit or log secrets.
 - Scope fixed. Do not add features not asked for.
 
@@ -25,8 +25,8 @@ Target: developer who installs third-party MCP servers and wants gate before tru
   - diff.ts: pure, by name: added, removed, changed (recursive field paths). Unchanged not listed.
   - CLI: approve/check as per README. TTY prompt via readline; non-TTY without --accept exits 1, never overwrites silently. Exit codes: 0 approved/unchanged, 1 differences/validation, 2 operational.
   - Decisions: x_hidden hashed (warning only); threshold 64 not 32; icons[].src exempt; overlap 0.5 proposal; identity limitation documented.
-- Layer 2, LLM reviewer: DONE (2026-05-13). Sends full tool definition as canonicalized JSON with data: icons omitted to Baseten https://inference.baseten.co/v1/chat/completions model meta-models/muse-spark-open-1026, only when there is added/changed text to review (otherwise no call, no key needed). Worker pool review-runner.ts (concurrency 4, deadline 300_000 proposals), per-tool reviewTool with retries, prompt-injection mitigated via per-call delimiter (not eliminated). Prints [REVIEW] lines + summary, exit codes: reviewer failure -> Error: ... exit 2, approve --accept bypasses flagged with WARNING, non-TTY without --accept refuses with flagged count, check with diff and nothing flagged -> exit 0 with Baseline NOT updated (check never writes). Endpoint seam MCP_TRUST_CHECK_REVIEWER_ENDPOINT http://127.0.0.1/localhost only. No accuracy numbers (eval not built), advisory only.
-- Layer 3, Sandbox: stretch goal, may be cut. Docker + canary.
+- Layer 2, LLM reviewer: DONE (2026-11-02). Sends full tool definition as canonicalized JSON with data: icons omitted to Baseten https://inference.baseten.co/v1/chat/completions model meta-models/muse-spark-open-1026, only when there is added/changed text to review (otherwise no call, no key needed). Worker pool review-runner.ts (concurrency 4, deadline 300_000 proposals), per-tool reviewTool with retries, prompt-injection mitigated via per-call delimiter (not eliminated). Prints [REVIEW] lines + summary, exit codes: reviewer failure -> Error: ... exit 2, approve --accept bypasses flagged with WARNING, non-TTY without --accept refuses with flagged count, check with diff and nothing flagged -> exit 0 with Baseline NOT updated (check never writes). Endpoint seam MCP_TRUST_CHECK_REVIEWER_ENDPOINT http://127.0.0.1/localhost only. Accuracy: see Evaluation section; advisory, not a guarantee.
+- Layer 3, Sandbox: NOT implemented, out of scope (see Scope).
 
 
 ## Baseline storage
@@ -41,9 +41,9 @@ Target: developer who installs third-party MCP servers and wants gate before tru
 ## Security rules
 - MCP servers are untrusted code running with user privileges. Test only against own dummy servers or servers named explicitly.
 - Never print env vars. Never execute anything server returns.
+- Eval: key only from process.env.BASETEN_API_KEY; never print the key or reasoning_content.
 
 ## How we work
-- One layer at a time. Do NOT start Layer 2 until asked.
 - Do not guess SDK APIs; read installed package types/docs. Report what could not be verified.
 - Before each terminal command that deletes files or installs package, announce what it does.
 - Keep README.md updated with how to run and what is known-unverified.
@@ -51,6 +51,10 @@ Target: developer who installs third-party MCP servers and wants gate before tru
 ## Layer 1 status
 - DONE as of 2026-10-31. All 4 corrections applied: whitelist from ToolSchema (9 fields), base64 threshold 64 with icons[].src exemption, inputSchema.type literal check, extend baseline.ts not new file.
 - Tests: validate, canonicalize, diff, baseline, CLI.
+
+## Evaluation
+- Author-written set, 128 cases (base 20, extra 60, paired 48), 3 runs per case, majority verdict, model meta-models/muse-spark-open-1026 via Baseten. Contested (labelled before any run) excluded from headline rates.
+- Headline (non-contested, by majority): FN 0, FP 3, hard-benign FPR 3/56, paired twins 3/21, contested 6 malicious 3 caught. Known gap p-08a/p-09a/p-16a (superlative persuasion, openly stated destination). Numbers from eval-results/run-2026-11-03-all.json.
 
 ## Known still open / unverified
 - Overlap threshold 0.5 and base64 threshold 64 are proposals, not spec; may need tuning.

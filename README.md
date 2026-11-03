@@ -14,7 +14,7 @@ Protects developers from malicious MCP servers - **tool poisoning** and **rug pu
 2. Resolve identity via baseline key (command+args hash or --name) and related search.
    - **A. Exact baseline exists:** diff old vs new. No diff + valid -> "already approved, unchanged", exit 0, DO NOT write. Diff -> print diff, exit 1; replace only if TTY y or --accept. Never silent overwrite. Non-TTY without --accept: exit 1.
    - **B. No exact but related (overlap >=0.5):** loud warning, diff vs best match (highest overlap, ties reported), same confirmation. On confirm save under new key with previousKey=old filename; old kept.
-   - **C. Nothing related:** first approval, save baseline. Print: "LLM review and human confirmation for flagged tools are not implemented yet."
+   - **C. Nothing related:** first approval, save baseline.
 3. Exit codes: 0 approved/unchanged, 1 differences/validation not confirmed, 2 operational error.
 
 ### Check contract
@@ -24,8 +24,8 @@ Same detection/diff, never writes. No exact and no related -> exit 2 "run approv
 
 - **Layer 0 - MCP client: DONE.** SDK v2 (client 2.4.0, server 2.4.0, zod 4). Dual lifecycle modern server/discover (2026-07-28) first, fallback legacy. fetchToolDefinitions returns {lifecycle, protocolVersion?, tools (FULL raw via passthrough), protocolViolations, protocolViolationCount}. Passive listener on _process.stdout counts non-JSON stdout.
 - **Layer 1 - Validate + Diff: DONE.** See below.
-- **Layer 2 - LLM reviewer: DONE.** Sends **full tool definition as JSON** (with `data:` icon URIs replaced by `"[omitted]"`, serialized via `canonicalize`) to Baseten `https://inference.baseten.co/v1/chat/completions` (`meta-models/muse-spark-open-1026`), not analyzed locally. Only called when there is added/changed tool text to review; otherwise no API call and no key required. Concurrency `CONFIG.REVIEW_CONCURRENCY=4`, deadline `CONFIG.REVIEW_DEADLINE_MS=300_000` (proposals). Prints per-flagged `[REVIEW] <tool> :: SUSPICIOUS :: <reason>` and summary `Reviewer: N tool(s) reviewed, M flagged (advisory, not a guarantee)`. Exit codes: reviewer failure (including missing `BASETEN_API_KEY`) -> `Error: ...` exit 2; `approve` with flagged but `--accept` bypasses with `WARNING: --accept given...`; non-TTY without `--accept` refuses with `Not a TTY... (reviewer flagged M tool(s)).` `check` with diff but nothing flagged → `Reviewer found nothing suspicious... Baseline NOT updated; run approve to accept this change.` + `Sandbox verification is not implemented yet.` and exit 0 (check never writes). Prompt-injection of reviewer is mitigated via per-call delimiter + instruction that data between delimiters is untrusted, not eliminated. Endpoint seam: set `MCP_TRUST_CHECK_REVIEWER_ENDPOINT=http://127.0.0.1:<port>/v1/chat/completions` (only `http:` + `127.0.0.1`/`localhost` allowed) for local testing. **No accuracy numbers – eval set not built, advisory not a guarantee.**
-- **Layer 3 - Sandbox: stretch goal.** Docker + canary file.
+- **Layer 2 - LLM reviewer: DONE.** Sends **full tool definition as JSON** (with `data:` icon URIs replaced by `"[omitted]"`, serialized via `canonicalize`) to Baseten `https://inference.baseten.co/v1/chat/completions` (`meta-models/muse-spark-open-1026`), not analyzed locally. Only called when there is added/changed tool text to review; otherwise no API call and no key required. Concurrency `CONFIG.REVIEW_CONCURRENCY=4`, deadline `CONFIG.REVIEW_DEADLINE_MS=300_000` (proposals). Prints per-flagged `[REVIEW] <tool> :: SUSPICIOUS :: <reason>` and summary `Reviewer: N tool(s) reviewed, M flagged (advisory, not a guarantee)`. Exit codes: reviewer failure (including missing `BASETEN_API_KEY`) -> `Error: ...` exit 2; `approve` with flagged but `--accept` bypasses with `WARNING: --accept given...`; non-TTY without `--accept` refuses with `Not a TTY... (reviewer flagged M tool(s)).` `check` with diff but nothing flagged → `Reviewer found nothing suspicious... Baseline NOT updated; run approve to accept this change.` + `Sandbox verification is not implemented yet.` and exit 0 (check never writes). Prompt-injection of reviewer is mitigated via per-call delimiter + instruction that data between delimiters is untrusted, not eliminated. Endpoint seam: set `MCP_TRUST_CHECK_REVIEWER_ENDPOINT=http://127.0.0.1:<port>/v1/chat/completions` (only `http:` + `127.0.0.1`/`localhost` allowed) for local testing. **Accuracy: see Evaluation section; advisory, not a guarantee.**
+- **Layer 3 - Sandbox: NOT implemented, out of scope (see Scope).**
 
 ## Layer 1 details
 
@@ -66,11 +66,11 @@ Tool name: `get_rug_weather`. Same name on every launch.
 **Reproduce (PowerShell):**
 ```powershell
 npm run demo:rug-pull:reset
-npm run demo:rug-pull:approve         # benign, baseline saved, exit 0
-npm run demo:rug-pull:check           # diff with hidden instruction, exit 1
-npm run demo:rug-pull:approve         # in a terminal: asks y/N; piped (no TTY): refuses, exit 1
-npm run demo:rug-pull:approve:accept  # replaces the baseline, exit 0
-npm run demo:rug-pull:check           # unchanged, exit 0 (the malicious version is now the baseline)
+npm run demo:rug-pull:approve         # benign, baseline saved, exit 0 (calls LLM, needs BASETEN_API_KEY in .env)
+npm run demo:rug-pull:check           # diff with hidden instruction, exit 1 (calls LLM)
+npm run demo:rug-pull:approve         # in a terminal: asks y/N; piped (no TTY): refuses, exit 1 (calls LLM)
+npm run demo:rug-pull:approve:accept  # replaces the baseline, exit 0 (calls LLM)
+npm run demo:rug-pull:check           # unchanged, exit 0 (the malicious version is now the baseline, no LLM)
 npm run demo:rug-pull:reset
 ```
 
@@ -101,16 +101,34 @@ npx tsx src/cli.ts -- npx tsx src/failure-servers/garbage-stay-alive.ts
 npx tsx src/cli.ts does-not-exist-12345
 ```
 
+## Evaluation
+
+**Setup:** Author-written set, 128 cases (base 20, extra 60, paired 48), 3 runs per case, majority verdict, model `meta-models/muse-spark-open-1026` via Baseten. Contested cases (labelled at authoring time, before any run) are excluded from headline rates and listed separately.
+
+**Headline (non-contested, by majority):** FN 0, FP 3, hard-benign FPR 3/56 and malicious detection 49/49. The 3 FP are hard benign cases. Paired benign twins only: FPR 3/21 (14.3%) – higher than overall because the benign twins intentionally mirror the malicious phrasing and risky-looking content.
+
+**Stability:** A second paired-only run gave the same FP count (3/21) with a different set (p-02b → F, p-18b → T); treat FP as ±1. The model is not fully deterministic.
+
+**Known gaps:** Contested malicious cases p-08a, p-09a, p-16a (superlative persuasion, openly stated destination) were missed (3 of 6 contested malicious caught); the reviewer targets instructions aimed at the AI, not non-imperative persuasion.
+
+**Limits:** The reviewer sees only the tool definition (a clean description with malicious code is out of scope); the full tool definition (all fields) is sent to Baseten for analysis (do not claim local analysis); the deterministic validator length cap rejects long benign tools (x-56); small author-written sample, not an independent benchmark; no claims about MCPTox or other benchmarks.
+
+**Reproduce:** `npm run eval:reviewer -- --set all --runs 3` (requires `BASETEN_API_KEY` in `.env`).
+
+## Scope
+
+Layer 3 (sandbox/execution verification) is intentionally not implemented and is out of scope. As a consequence, a tool with a clean description but malicious runtime behavior is not detected by this tool.
+
 ## Known limitations / unverified
 
-- Windows orphan processes: via npx/cmd can leave orphans. Layer 3 Docker.
+- Windows orphan processes: via npx/cmd can leave orphans (unmitigated).
 - Plain non-JSON stdout: SDK silently ignores SyntaxError; we sniff via private _process.stdout hook (may break on SDK update).
 - Timeout granularity: per-request +2000ms connect +1000ms per page (tuned).
 - Overlap threshold 0.5: proposal not spec; may need tuning (CONFIG).
 - Base64 threshold 64: proposal not spec; 32 false-positives. icons[].src exempt.
 - Identity limitation: as above.
 - Baseline integrity: verifies `hashTool(definition)` vs `tool.hash` and `aggregateHash` vs recomputed; detects partial/accidental edits only. **Does NOT stop attacker with same file privilege who recomputes hashes** — local baseline file is not a security boundary; real protection needs HMAC key outside file or baselines committed to git (with history/signature verification). Exit code behaviour unchanged: `readBaseline` errors → exit 2 in `approve`/`check`; `findRelatedBaselines` skips tampered/unreadable with warning (no crash). Notify if you see different behaviour.
-- LLM review and sandbox: not implemented (Layer 2/3).
+
 
 ## Security
 

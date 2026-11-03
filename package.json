@@ -1,7 +1,7 @@
 {
   "name": "mcp-trust-check",
   "version": "1.0.0",
-  "description": "Layer 0 of MCP trust-check CLI - connectivity + tool enumeration with modern/legacy lifecycle handling",
+  "description": "CLI that detects MCP tool poisoning and rug pulls: baseline + diff + LLM review",
   "type": "module",
   "bin": {
     "mcp-trust-check": "./src/cli.ts"
@@ -13,7 +13,8 @@
     "dummy:legacy": "tsx src/dummy-server-legacy.ts",
     "build": "tsc",
     "check": "tsx src/cli.ts check",
-    "test": "npm run test:cli",
+    "test": "tsx --test tests/validate.test.ts tests/canonicalize.test.ts tests/diff.test.ts tests/baseline.test.ts tests/cli.test.ts tests/eval-cases.test.ts",
+    "test:smoke": "npm run test:cli",
     "test:cli": "tsx src/cli.ts -- npx tsx src/dummy-server.ts",
     "test:legacy": "tsx src/cli.ts -- npx tsx src/dummy-server-legacy.ts",
     "test:spawn-fail": "tsx src/cli.ts -- does-not-exist-12345",
