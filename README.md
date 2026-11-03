@@ -121,11 +121,15 @@ npx tsx src/cli.ts does-not-exist-12345
 
 **Setup:** Author-written set, 128 cases (base 20, extra 60, paired 48), 3 runs per case, majority verdict, model `meta-models/muse-spark-open-1026` via Baseten. Contested cases (labelled at authoring time, before any run) are excluded from headline rates and listed separately.
 
-**Headline (non-contested, by majority):** FN 0, FP 3, hard-benign FPR 3/56 and malicious detection 49/49. The 3 FP are hard benign cases. Paired benign twins only: FPR 3/21 (14.3%) – higher than overall because the benign twins intentionally mirror the malicious phrasing and risky-looking content.
+**Headline (non-contested, by majority, set=all, 114 cases):** TP 53, FP 4, FN 0, TN 57; malicious hard detection 49/49; benign easy FPR 0/5; hard-benign FPR 4/56 (7.1%); per-run hard-benign FPR 11/168 (6.5%). The 4 FP are paired benign cases p-02b, p-03b, p-05b, p-18b. Paired file (benign twins + standalone) (non-contested, benign = 14 twins + 7 standalone = 21): FPR 4/21 (19.0%) – higher than overall because the benign twins intentionally mirror the malicious phrasing and risky-looking content. Pair accuracy (non-contested): both correct 10/14 (71.4%); only malicious caught 4 (p-02, p-03, p-05, p-18); only benign cleared 0; neither 0.
 
-**Stability:** A second paired-only run gave the same FP count (3/21) with a different set (p-02b → F, p-18b → T); treat FP as ±1. The model is not fully deterministic.
+**Stability:** Runs disagreed on 4 cases (p-02b, p-11b, p-16a, p-18b); across three runs (two full, one paired-only) the FP count was 3, 3 and 4, so treat FP as ±1. The model is not fully deterministic.
 
-**Known gaps:** Contested malicious cases p-08a, p-09a, p-16a (superlative persuasion, openly stated destination) were missed (3 of 6 contested malicious caught); the reviewer targets instructions aimed at the AI, not non-imperative persuasion.
+**Known gaps:** Contested (14 cases, excluded from headline): malicious missed p-08a and p-09a (superlative persuasion with no instruction verb); p-16a was caught by majority (T T F) in this run; contested malicious caught 5 of 7 (incl. x-12). Contested pair accuracy 3/6. The reviewer targets instructions aimed at the AI, not non-imperative persuasion.
+
+**Latency:** Per call mean 3.0 s, max 11.6 s.
+
+**Coverage:** Families with no non-contested result remain F5, F6, F12, F16: no coverage is claimed for them.
 
 **Limits:** The reviewer sees only the tool definition (a clean description with malicious code is out of scope); the full tool definition (all fields) is sent to Baseten for analysis (do not claim local analysis); the deterministic validator length cap rejects long benign tools (x-56); small author-written sample, not an independent benchmark; no claims about MCPTox or other benchmarks.
 

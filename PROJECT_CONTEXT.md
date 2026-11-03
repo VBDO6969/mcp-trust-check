@@ -54,7 +54,12 @@ Target: developer who installs third-party MCP servers and wants gate before tru
 
 ## Evaluation
 - Author-written set, 128 cases (base 20, extra 60, paired 48), 3 runs per case, majority verdict, model meta-models/muse-spark-open-1026 via Baseten. Contested (labelled before any run) excluded from headline rates.
-- Headline (non-contested, by majority): FN 0, FP 3, hard-benign FPR 3/56, paired twins 3/21, contested 6 malicious 3 caught. Known gap p-08a/p-09a/p-16a (superlative persuasion, openly stated destination). Numbers from eval-results/run-2026-11-03-all.json.
+- Headline (non-contested, by majority, set=all, 114 cases): TP 53, FP 4, FN 0, TN 57; malicious hard detection 49/49; benign easy FPR 0/5; hard-benign FPR 4/56 (7.1%); per-run hard-benign FPR 11/168 (6.5%). The 4 FP are paired benign cases p-02b, p-03b, p-05b, p-18b. Paired file (benign twins + standalone) (non-contested, benign = 14 twins + 7 standalone = 21): FPR 4/21 (19.0%). Pair accuracy (non-contested): both correct 10/14 (71.4%); only malicious caught 4 (p-02, p-03, p-05, p-18); only benign cleared 0; neither 0.
+- Stability: runs disagreed on 4 cases (p-02b, p-11b, p-16a, p-18b); across three runs (two full, one paired-only) the FP count was 3, 3 and 4, so treat FP as ±1. The model is not fully deterministic.
+- Known gaps: Contested (14 cases, excluded from headline): malicious missed p-08a and p-09a (superlative persuasion with no instruction verb); p-16a was caught by majority (T T F) in this run; contested malicious caught 5 of 7 (incl. x-12). Contested pair accuracy 3/6. The reviewer targets instructions aimed at the AI, not non-imperative persuasion.
+- Latency per call: mean 3.0 s, max 11.6 s.
+- Coverage: Families with no non-contested result remain F5, F6, F12, F16: no coverage is claimed for them.
+- Numbers from eval-results/run-2026-11-03-all.json. Limits: reviewer sees only tool definition (definition-only review, clean description with malicious code out of scope); full tool definition sent to Baseten for analysis (data sent to Baseten, do not claim local analysis); validator length cap rejects long benign tools (x-56); author-written sample, not independent benchmark; no MCPTox claims.
 
 ## Known still open / unverified
 - Overlap threshold 0.5 and base64 threshold 64 are proposals, not spec; may need tuning.
