@@ -2,7 +2,23 @@
 
 > **Hackathon:** Meta Global AI Developer Hackathon - Oct 27-Nov 4 2026.
 
+Everything in this repository was built during the hackathon (Oct 27 - Nov 4 2026).
+
 Protects developers from malicious MCP servers - **tool poisoning** and **rug pull**. CLI gate before trusting third-party servers, locally and in CI.
+
+## Quick start
+
+```powershell
+npm ci
+copy .env.example .env  # set BASETEN_API_KEY (only needed when added/changed tools must be reviewed)
+npm run demo:rug-pull:reset
+npm run demo:rug-pull:approve
+npm run demo:rug-pull:check
+```
+
+Use `npx tsx src/cli.ts ...` or the npm scripts above; the package is not published to npm.
+
+Platform notes: developed and tested on Windows; the orphan-process limitation is Windows-specific; the CLI tests were made platform-aware in item 1 but are only verified on Windows unless otherwise noted.
 
 ## Commands
 
@@ -18,13 +34,13 @@ Protects developers from malicious MCP servers - **tool poisoning** and **rug pu
 3. Exit codes: 0 approved/unchanged, 1 differences/validation not confirmed, 2 operational error.
 
 ### Check contract
-Same detection/diff, never writes. No exact and no related -> exit 2 "run approve". For exact baseline: validation errors -> exit 1 (no LLM); no diff -> "check passed: unchanged and valid", exit 0, no LLM; diff with added/changed -> LLM review on those tools. Related baseline without exact: prints diff, exit 1, no LLM. Exit 0 when reviewer finds nothing suspicious because check never writes (run `approve` to accept). Still prints "Sandbox verification is not implemented yet."
+Same detection/diff, never writes. No exact and no related -> exit 2 "run approve". For exact baseline: validation errors -> exit 1 (no LLM); no diff -> "check passed: unchanged and valid", exit 0, no LLM; diff with added/changed -> LLM review on those tools. Related baseline without exact: prints diff, exit 1, no LLM. Exit 0 when reviewer finds nothing suspicious because check never writes (run `approve` to accept).
 
 ## Architecture
 
 - **Layer 0 - MCP client: DONE.** SDK v2 (client 2.4.0, server 2.4.0, zod 4). Dual lifecycle modern server/discover (2026-07-28) first, fallback legacy. fetchToolDefinitions returns {lifecycle, protocolVersion?, tools (FULL raw via passthrough), protocolViolations, protocolViolationCount}. Passive listener on _process.stdout counts non-JSON stdout.
 - **Layer 1 - Validate + Diff: DONE.** See below.
-- **Layer 2 - LLM reviewer: DONE.** Sends **full tool definition as JSON** (with `data:` icon URIs replaced by `"[omitted]"`, serialized via `canonicalize`) to Baseten `https://inference.baseten.co/v1/chat/completions` (`meta-models/muse-spark-open-1026`), not analyzed locally. Only called when there is added/changed tool text to review; otherwise no API call and no key required. Concurrency `CONFIG.REVIEW_CONCURRENCY=4`, deadline `CONFIG.REVIEW_DEADLINE_MS=300_000` (proposals). Prints per-flagged `[REVIEW] <tool> :: SUSPICIOUS :: <reason>` and summary `Reviewer: N tool(s) reviewed, M flagged (advisory, not a guarantee)`. Exit codes: reviewer failure (including missing `BASETEN_API_KEY`) -> `Error: ...` exit 2; `approve` with flagged but `--accept` bypasses with `WARNING: --accept given...`; non-TTY without `--accept` refuses with `Not a TTY... (reviewer flagged M tool(s)).` `check` with diff but nothing flagged → `Reviewer found nothing suspicious... Baseline NOT updated; run approve to accept this change.` + `Sandbox verification is not implemented yet.` and exit 0 (check never writes). Prompt-injection of reviewer is mitigated via per-call delimiter + instruction that data between delimiters is untrusted, not eliminated. Endpoint seam: set `MCP_TRUST_CHECK_REVIEWER_ENDPOINT=http://127.0.0.1:<port>/v1/chat/completions` (only `http:` + `127.0.0.1`/`localhost` allowed) for local testing. **Accuracy: see Evaluation section; advisory, not a guarantee.**
+- **Layer 2 - LLM reviewer: DONE.** Sends **full tool definition as JSON** (with `data:` icon URIs replaced by `"[omitted]"`, serialized via `canonicalize`) to Baseten `https://inference.baseten.co/v1/chat/completions` (`meta-models/muse-spark-open-1026`), not analyzed locally. Only called when there is added/changed tool text to review; otherwise no API call and no key required. Concurrency `CONFIG.REVIEW_CONCURRENCY=4`, deadline `CONFIG.REVIEW_DEADLINE_MS=300_000` (proposals). Prints per-flagged `[REVIEW] <tool> :: SUSPICIOUS :: <reason>` and summary `Reviewer: N tool(s) reviewed, M flagged (advisory, not a guarantee)`. Exit codes: reviewer failure (including missing `BASETEN_API_KEY`) -> `Error: ...` exit 2; `approve` with flagged but `--accept` bypasses with `WARNING: --accept given...`; non-TTY without `--accept` refuses with `Not a TTY... (reviewer flagged M tool(s)).` `check` with diff but nothing flagged → `Reviewer found nothing suspicious... Baseline NOT updated; run approve to accept this change.` and exit 0 (check never writes). Prompt-injection of reviewer is mitigated via per-call delimiter + instruction that data between delimiters is untrusted, not eliminated. Endpoint seam: set `MCP_TRUST_CHECK_REVIEWER_ENDPOINT=http://127.0.0.1:<port>/v1/chat/completions` (only `http:` + `127.0.0.1`/`localhost` allowed) for local testing. **Accuracy: see Evaluation section; advisory, not a guarantee.**
 - **Layer 3 - Sandbox: NOT implemented, out of scope (see Scope).**
 
 ## Layer 1 details
@@ -114,6 +130,8 @@ npx tsx src/cli.ts does-not-exist-12345
 **Limits:** The reviewer sees only the tool definition (a clean description with malicious code is out of scope); the full tool definition (all fields) is sent to Baseten for analysis (do not claim local analysis); the deterministic validator length cap rejects long benign tools (x-56); small author-written sample, not an independent benchmark; no claims about MCPTox or other benchmarks.
 
 **Reproduce:** `npm run eval:reviewer -- --set all --runs 3` (requires `BASETEN_API_KEY` in `.env`).
+
+**Evidence:** `eval-results/run-2026-11-03-all.json` (generated by the command below)
 
 ## Scope
 

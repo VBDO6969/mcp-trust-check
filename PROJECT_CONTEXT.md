@@ -35,7 +35,7 @@ Target: developer who installs third-party MCP servers and wants gate before tru
 
 ## Approve/check contract and exit codes
 - approve: 0 approved/unchanged, 1 differences/validation not confirmed, 2 operational (including reviewer failure, missing BASETEN_API_KEY). LLM only when there is added/changed text; otherwise no call, no key needed. Reviewer prints [REVIEW] lines + summary; flagged requires confirmation with " (reviewer flagged M tool(s))" suffix, non-TTY without --accept -> "Not a TTY... (reviewer flagged M tool(s))." exit 1, --accept bypasses with WARNING.
-- check: 0 unchanged+valid (no LLM), 1 differences/validation, 1 flagged diff (with [REVIEW] lines), 0 diff but nothing flagged with "Reviewer found nothing suspicious... Baseline NOT updated" (check never writes, exit 0), 1 related baseline (no LLM), 2 no baseline. Validation errors reworded without "provisional". Keeps "Sandbox verification is not implemented yet." and drops all "LLM review ... not implemented" messages.
+- check: 0 unchanged+valid (no LLM), 1 differences/validation, 1 flagged diff (with [REVIEW] lines), 0 diff but nothing flagged with "Reviewer found nothing suspicious... Baseline NOT updated" (check never writes, exit 0), 1 related baseline (no LLM), 2 no baseline. Validation errors reworded without "provisional".
 - Both keep protocolViolations.
 
 ## Security rules

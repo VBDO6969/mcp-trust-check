@@ -163,12 +163,10 @@ async function main(): Promise<void> {
       const diff=diffTools(baseRaw,curRaw); const hasDiff=diff.added.length>0||diff.removed.length>0||diff.changed.length>0;
       if(hasValidationErrors){
         console.error(`Validation errors: ${validation.findings.filter(f=>f.severity==="error").length} error(s)`);
-        console.error("Sandbox verification is not implemented yet.");
         await doExit(1);
       }
       if(!hasDiff){
         console.log("check passed: unchanged and valid");
-        console.error("Sandbox verification is not implemented yet.");
         await doExit(0);
       }
       // hasDiff and no validation errors -> review added+changed
@@ -177,16 +175,13 @@ async function main(): Promise<void> {
       const toolsToReviewCheck = selectToolsForReview(curRaw, diff);
       if(toolsToReviewCheck.length===0){
         // only removed tools, nothing to review
-        console.error("Sandbox verification is not implemented yet.");
         await doExit(0);
       }
       const { flagged: flaggedCheck } = await runReviewIfNeeded(toolsToReviewCheck);
       if(flaggedCheck.length>0){
-        console.error("Sandbox verification is not implemented yet.");
         await doExit(1);
       } else {
         console.error("Reviewer found nothing suspicious (advisory, not a guarantee). Baseline NOT updated; run approve to accept this change.");
-        console.error("Sandbox verification is not implemented yet.");
         await doExit(0);
       }
     } else {
@@ -196,9 +191,8 @@ async function main(): Promise<void> {
         console.error(`WARNING: No exact baseline, but related baseline(s) found with overlap >= 0.5:`); for(const r of related) console.error(`  - ${r.fileName} overlap=${r.overlap.toFixed(2)} common=${r.commonNames.join(",")}`);
         const baseRaw=bestOne.baseline.tools.map(t=>t.definition as Record<string,unknown>); const curRaw=fetchResult.tools as unknown as Record<string,unknown>[];
         const diff=diffTools(baseRaw,curRaw); console.error(`Diff vs best match (${bestOne.fileName}):`); console.error(formatDiff(diff)); if(best.length>1) console.error(`Ties: ${best.map(b=>b.fileName).join(", ")}`);
-        console.error("Sandbox verification is not implemented yet.");
         await doExit(1);
-      } else { console.error(`No baseline found for this server. Run: approve ${command} ${args.join(" ")}`); console.error("Sandbox verification is not implemented yet."); await doExit(2); }
+      } else { console.error(`No baseline found for this server. Run: approve ${command} ${args.join(" ")}`); await doExit(2); }
     }
   }
 }

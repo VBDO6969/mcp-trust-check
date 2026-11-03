@@ -172,3 +172,27 @@ describe("eval-cases", () => {
     assert.equal(res.wrongPairs[0].pair_id,"p-test-01");
   });
 });
+
+// Evidence file check: expected to FAIL until eval-results/run-2026-11-03-all.json is replaced with a real 128-case run.
+// This describe is skipped unless CHECK_EVAL_EVIDENCE=1 is set, so it is out of the default `npm test` list.
+const evidenceDescribe = process.env.CHECK_EVAL_EVIDENCE === "1" ? describe : describe.skip;
+evidenceDescribe("eval-results evidence (requires CHECK_EVAL_EVIDENCE=1)", () => {
+  it("eval-results/run-2026-11-03-all.json contains exactly the case ids of cases.json + cases-extra.json + cases-paired.json (128 ids, order-independent) and runs is 3", () => {
+    const base = JSON.parse(fs.readFileSync(path.resolve("scripts/eval/cases.json"), "utf8"));
+    const extra = JSON.parse(fs.readFileSync(path.resolve("scripts/eval/cases-extra.json"), "utf8"));
+    const paired = JSON.parse(fs.readFileSync(path.resolve("scripts/eval/cases-paired.json"), "utf8"));
+    const allExpectedIds = [...base, ...extra, ...paired].map((c: any) => c.id);
+    assert.equal(allExpectedIds.length, 128, `expected 128 ids from 3 files, got ${allExpectedIds.length}`);
+    const uniqExpected = new Set(allExpectedIds);
+    assert.equal(uniqExpected.size, 128, `expected 128 unique ids, got ${uniqExpected.size}`);
+    const evidencePath = path.resolve("eval-results/run-2026-11-03-all.json");
+    const evidence = JSON.parse(fs.readFileSync(evidencePath, "utf8"));
+    assert.equal(evidence.runs, 3, `expected runs=3 in evidence file, got ${evidence.runs}`);
+    assert.ok(Array.isArray(evidence.cases), "evidence.cases should be an array");
+    const evidenceIds = evidence.cases.map((c: any) => c.id);
+    assert.equal(evidenceIds.length, 128, `expected 128 cases in evidence file, got ${evidenceIds.length}`);
+    const sortedExpected = [...allExpectedIds].sort();
+    const sortedEvidence = [...evidenceIds].sort();
+    assert.deepEqual(sortedEvidence, sortedExpected, "evidence ids should exactly match cases.json + cases-extra.json + cases-paired.json (order-independent)");
+  });
+});

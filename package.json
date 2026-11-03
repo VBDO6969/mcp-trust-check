@@ -2,6 +2,7 @@
   "name": "mcp-trust-check",
   "version": "1.0.0",
   "description": "CLI that detects MCP tool poisoning and rug pulls: baseline + diff + LLM review",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "mcp-trust-check": "./src/cli.ts"
@@ -13,7 +14,7 @@
     "dummy:legacy": "tsx src/dummy-server-legacy.ts",
     "build": "tsc",
     "check": "tsx src/cli.ts check",
-    "test": "tsx --test tests/validate.test.ts tests/canonicalize.test.ts tests/diff.test.ts tests/baseline.test.ts tests/cli.test.ts tests/eval-cases.test.ts",
+    "test": "tsx --test tests/validate.test.ts tests/canonicalize.test.ts tests/diff.test.ts tests/baseline.test.ts tests/cli.test.ts tests/reviewer.test.ts tests/review-runner.test.ts tests/eval-cases.test.ts",
     "test:smoke": "npm run test:cli",
     "test:cli": "tsx src/cli.ts -- npx tsx src/dummy-server.ts",
     "test:legacy": "tsx src/cli.ts -- npx tsx src/dummy-server-legacy.ts",

@@ -62,7 +62,10 @@ function runCli(args: string[], extraEnv: Record<string, string | undefined> = {
   return new Promise((resolve) => {
     const env = { ...process.env, BASETEN_API_KEY: "test-key", MCP_TRUST_CHECK_REVIEWER_ENDPOINT: `http://127.0.0.1:${fakePort}/v1/chat/completions`, ...extraEnv };
     for (const [k, v] of Object.entries(extraEnv)) if (v === undefined) delete (env as any)[k];
-    const child = spawn("cmd", ["/c", "npx", "tsx", "src/cli.ts", ...args], { stdio: ["pipe", "pipe", "pipe"], env } as any);
+    const isWin = process.platform === "win32";
+    const child = isWin
+      ? spawn("cmd", ["/c", "npx", "tsx", "src/cli.ts", ...args], { stdio: ["pipe", "pipe", "pipe"], env } as any)
+      : spawn("npx", ["tsx", "src/cli.ts", ...args], { stdio: ["pipe", "pipe", "pipe"], env } as any);
     let stdout = ""; let stderr = "";
     child.stdout.on("data", (d) => (stdout += d.toString()));
     child.stderr.on("data", (d) => (stderr += d.toString()));

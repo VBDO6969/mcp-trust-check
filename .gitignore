@@ -7,3 +7,4 @@ src/dummy-server-rug-pull.state.json
 src/dummy-server-rug-pull.state.*
 *.log
 .DS_Store
+eval-results/latest.json
