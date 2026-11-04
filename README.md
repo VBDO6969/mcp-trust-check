@@ -20,7 +20,7 @@ npm run demo:rug-pull:check
 
 Use `npx tsx src/cli.ts ...` or the npm scripts above; the package is not published to npm.
 
-Platform notes: developed and tested on Windows; the orphan-process limitation is Windows-specific; the CLI tests were made platform-aware in item 1 but are only verified on Windows unless otherwise noted.
+Developed on Windows. The demo flow (reset, approve, check) and `npm test` were also run successfully on Linux (WSL, Node v26.13.0). Not verified: macOS, `eval:reviewer`, and the timeout/spawn-fail test scripts on Linux. `npm ci` may print an install-scripts warning for esbuild; it did not affect running.
 
 ## Commands
 
